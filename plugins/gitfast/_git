@@ -33,9 +33,8 @@ if [ -z "$script" ]; then
 		bash_completion='/usr/share/bash-completion/completions/'
 
 	locations=(
-		"${${funcsourcetrace[1]%:*}:A:h}"/git-completion.bash
+		"$(dirname ${funcsourcetrace[1]%:*})"/git-completion.bash
 		"$HOME/.local/share/bash-completion/completions/git"
-		'/usr/local/share/bash-completion/completions/git'
 		"$bash_completion/git"
 		'/etc/bash_completion.d/git' # old debian
 		)
@@ -52,17 +51,10 @@ functions[complete]="$old_complete"
 
 __gitcompadd ()
 {
-	compadd -p "${2-}" -S "${3- }" -q -- ${=1} && _ret=0
+	compadd -Q -p "${2-}" -S "${3- }" ${@[4,-1]} -- ${=1} && _ret=0
 }
 
 __gitcomp ()
-{
-	emulate -L zsh
-
-	IFS=$' \t\n' __gitcompadd "$1" "${2-}" "${4- }"
-}
-
-__gitcomp_opts ()
 {
 	emulate -L zsh
 
@@ -78,7 +70,7 @@ __gitcomp_opts ()
 			break
 		fi
 
-		if [[ -z "${4+set}" ]]; then
+		if [[ -z "${4-}" ]]; then
 			case $c in
 			*=) c="${c%=}"; sfx="=" ;;
 			*.) sfx="" ;;
@@ -87,7 +79,7 @@ __gitcomp_opts ()
 		else
 			sfx="$4"
 		fi
-		__gitcompadd "$c" "${2-}" "$sfx"
+		__gitcompadd "$c" "${2-}" "$sfx" -q
 	done
 }
 
@@ -95,10 +87,7 @@ __gitcomp_nl ()
 {
 	emulate -L zsh
 
-	# words that don't end up in space
-	compadd -p "${2-}" -S "${4- }" -q -- ${${(f)1}:#*\ } && _ret=0
-	# words that end in space
-	compadd -p "${2-}" -S " ${4- }" -q -- ${${(M)${(f)1}:#*\ }% } && _ret=0
+	IFS=$'\n' __gitcompadd "$1" "${2-}" "${4- }"
 }
 
 __gitcomp_file ()
@@ -116,6 +105,21 @@ __gitcomp_direct ()
 __gitcomp_file_direct ()
 {
 	__gitcomp_file "$1" ""
+}
+
+__gitcomp_nl_append ()
+{
+	__gitcomp_nl "$@"
+}
+
+__gitcomp_direct_append ()
+{
+	__gitcomp_direct "$@"
+}
+
+_git_zsh ()
+{
+	__gitcomp "v1.2"
 }
 
 __git_complete_command ()
@@ -202,7 +206,9 @@ __git_zsh_main ()
 {
 	local curcontext="$curcontext" state state_descr line
 	typeset -A opt_args
-	local -a __git_C_args
+	local -a orig_words __git_C_args
+
+	orig_words=( ${words[@]} )
 
 	_arguments -C \
 		'(-p --paginate -P --no-pager)'{-p,--paginate}'[pipe all output into ''less'']' \
@@ -239,7 +245,7 @@ __git_zsh_main ()
 		emulate ksh -c __git_complete_config_variable_name_and_value
 		;;
 	(arg)
-		local command="${words[1]}" __git_dir __git_cmd_idx=1
+		local command="${words[1]}" __git_dir
 
 		if (( $+opt_args[--bare] )); then
 			__git_dir='.'
@@ -253,7 +259,7 @@ __git_zsh_main ()
 
 		(( $+opt_args[--help] )) && command='help'
 
-		words=( git ${words[@]} )
+		words=( ${orig_words[@]} )
 
 		__git_zsh_bash_func $command
 		;;
@@ -263,7 +269,7 @@ __git_zsh_main ()
 _git ()
 {
 	local _ret=1
-	local cur cword prev __git_cmd_idx=0
+	local cur cword prev
 
 	cur=${words[CURRENT]}
 	prev=${words[CURRENT-1]}

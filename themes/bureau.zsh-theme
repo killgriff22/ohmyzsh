@@ -16,7 +16,7 @@ ZSH_THEME_GIT_PROMPT_STAGED="%{$fg_bold[green]%}●%{$reset_color%}"
 ZSH_THEME_GIT_PROMPT_UNSTAGED="%{$fg_bold[yellow]%}●%{$reset_color%}"
 ZSH_THEME_GIT_PROMPT_UNTRACKED="%{$fg_bold[red]%}●%{$reset_color%}"
 
-bureau_git_info () {
+bureau_git_branch () {
   local ref
   ref=$(command git symbolic-ref HEAD 2> /dev/null) || \
   ref=$(command git rev-parse --short HEAD 2> /dev/null) || return
@@ -25,21 +25,20 @@ bureau_git_info () {
 
 bureau_git_status() {
   local result gitstatus
-  gitstatus="$(command git status --porcelain -b 2>/dev/null)"
 
   # check status of files
-  local gitfiles="$(tail -n +2 <<< "$gitstatus")"
-  if [[ -n "$gitfiles" ]]; then
-    if [[ "$gitfiles" =~ $'(^|\n)[AMRD]. ' ]]; then
+  gitstatus=$(command git status --porcelain -b 2> /dev/null)
+  if [[ -n "$gitstatus" ]]; then
+    if $(echo "$gitstatus" | command grep -q '^[AMRD]. '); then
       result+="$ZSH_THEME_GIT_PROMPT_STAGED"
     fi
-    if [[ "$gitfiles" =~ $'(^|\n).[MTD] ' ]]; then
+    if $(echo "$gitstatus" | command grep -q '^.[MTD] '); then
       result+="$ZSH_THEME_GIT_PROMPT_UNSTAGED"
     fi
-    if [[ "$gitfiles" =~ $'(^|\n)\\?\\? ' ]]; then
+    if $(echo "$gitstatus" | command grep -q -E '^\?\? '); then
       result+="$ZSH_THEME_GIT_PROMPT_UNTRACKED"
     fi
-    if [[ "$gitfiles" =~ $'(^|\n)UU ' ]]; then
+    if $(echo "$gitstatus" | command grep -q '^UU '); then
       result+="$ZSH_THEME_GIT_PROMPT_UNMERGED"
     fi
   else
@@ -47,19 +46,17 @@ bureau_git_status() {
   fi
 
   # check status of local repository
-  local gitbranch="$(head -n 1 <<< "$gitstatus")"
-  if [[ "$gitbranch" =~ '^## .*ahead' ]]; then
+  if $(echo "$gitstatus" | command grep -q '^## .*ahead'); then
     result+="$ZSH_THEME_GIT_PROMPT_AHEAD"
   fi
-  if [[ "$gitbranch" =~ '^## .*behind' ]]; then
+  if $(echo "$gitstatus" | command grep -q '^## .*behind'); then
     result+="$ZSH_THEME_GIT_PROMPT_BEHIND"
   fi
-  if [[ "$gitbranch" =~ '^## .*diverged' ]]; then
+  if $(echo "$gitstatus" | command grep -q '^## .*diverged'); then
     result+="$ZSH_THEME_GIT_PROMPT_DIVERGED"
   fi
 
-  # check if there are stashed changes
-  if command git rev-parse --verify refs/stash &> /dev/null; then
+  if $(command git rev-parse --verify refs/stash &> /dev/null); then
     result+="$ZSH_THEME_GIT_PROMPT_STASHED"
   fi
 
@@ -67,22 +64,21 @@ bureau_git_status() {
 }
 
 bureau_git_prompt() {
-  # check git information
-  local gitinfo=$(bureau_git_info)
-  if [[ -z "$gitinfo" ]]; then
+  local gitbranch=$(bureau_git_branch)
+  local gitstatus=$(bureau_git_status)
+  local info
+
+  if [[ -z "$gitbranch" ]]; then
     return
   fi
 
-  # quote % in git information
-  local output="${gitinfo:gs/%/%%}"
+  info="${gitbranch:gs/%/%%}"
 
-  # check git status
-  local gitstatus=$(bureau_git_status)
   if [[ -n "$gitstatus" ]]; then
-    output+=" $gitstatus"
+    info+=" $gitstatus"
   fi
 
-  echo "${ZSH_THEME_GIT_PROMPT_PREFIX}${output}${ZSH_THEME_GIT_PROMPT_SUFFIX}"
+  echo "${ZSH_THEME_GIT_PROMPT_PREFIX}${info}${ZSH_THEME_GIT_PROMPT_SUFFIX}"
 }
 
 
@@ -103,14 +99,19 @@ get_space () {
   local STR=$1$2
   local zero='%([BSUbfksu]|([FB]|){*})'
   local LENGTH=${#${(S%%)STR//$~zero/}}
-  local SPACES=$(( COLUMNS - LENGTH - ${ZLE_RPROMPT_INDENT:-1} ))
+  local SPACES=""
+  (( LENGTH = ${COLUMNS} - $LENGTH - 1))
 
-  (( SPACES > 0 )) || return
-  printf ' %.0s' {1..$SPACES}
+  for i in {0..$LENGTH}
+    do
+      SPACES="$SPACES "
+    done
+
+  echo $SPACES
 }
 
 _1LEFT="$_USERNAME $_PATH"
-_1RIGHT="[%*]"
+_1RIGHT="[%*] "
 
 bureau_precmd () {
   _1SPACES=`get_space $_1LEFT $_1RIGHT`

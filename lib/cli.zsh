@@ -37,7 +37,7 @@ function _omz {
   elif (( CURRENT == 3 )); then
     case "$words[2]" in
       changelog) local -a refs
-        refs=("${(@f)$(builtin cd -q "$ZSH"; command git for-each-ref --format="%(refname:short):%(subject)" refs/heads refs/tags)}")
+        refs=("${(@f)$(cd "$ZSH"; command git for-each-ref --format="%(refname:short):%(subject)" refs/heads refs/tags)}")
         _describe 'command' refs ;;
       plugin) subcmds=(
         'disable:Disable plugin(s)'
@@ -105,10 +105,7 @@ function _omz {
   return 0
 }
 
-# If run from a script, do not set the completion function
-if (( ${+functions[compdef]} )); then
-  compdef _omz omz
-fi
+compdef _omz omz
 
 ## Utility functions
 
@@ -179,7 +176,7 @@ function _omz::changelog {
   local version=${1:-HEAD} format=${3:-"--text"}
 
   if (
-    builtin cd -q "$ZSH"
+    cd "$ZSH"
     ! command git show-ref --verify refs/heads/$version && \
     ! command git show-ref --verify refs/tags/$version && \
     ! command git rev-parse --verify "${version}^{commit}"
@@ -292,7 +289,7 @@ multi == 1 && length(\$0) > 0 {
   }
 
   # Exit if the new .zshrc file has syntax errors
-  if ! command zsh -n "$zdot/.zshrc"; then
+  if ! zsh -n "$zdot/.zshrc"; then
     _omz::log error "broken syntax in '"${zdot/#$HOME/\~}/.zshrc"'. Rolling back changes..."
     command mv -f "$zdot/.zshrc" "$zdot/.zshrc.new"
     command mv -f "$zdot/.zshrc.bck" "$zdot/.zshrc"
@@ -302,8 +299,10 @@ multi == 1 && length(\$0) > 0 {
   # Restart the zsh session if there were no errors
   _omz::log info "plugins disabled: ${(j:, :)dis_plugins}."
 
-  # Only reload zsh if run in an interactive session
-  [[ ! -o interactive ]] || _omz::reload
+  # Old zsh versions don't have ZSH_ARGZERO
+  local zsh="${ZSH_ARGZERO:-${functrace[-1]%:*}}"
+  # Check whether to run a login shell
+  [[ "$zsh" = -* || -o login ]] && exec -l "${zsh#-}" || exec "$zsh"
 }
 
 function _omz::plugin::enable {
@@ -366,7 +365,7 @@ multi == 1 && /^[^#]*\)/ {
   }
 
   # Exit if the new .zshrc file has syntax errors
-  if ! command zsh -n "$zdot/.zshrc"; then
+  if ! zsh -n "$zdot/.zshrc"; then
     _omz::log error "broken syntax in '"${zdot/#$HOME/\~}/.zshrc"'. Rolling back changes..."
     command mv -f "$zdot/.zshrc" "$zdot/.zshrc.new"
     command mv -f "$zdot/.zshrc.bck" "$zdot/.zshrc"
@@ -376,8 +375,10 @@ multi == 1 && /^[^#]*\)/ {
   # Restart the zsh session if there were no errors
   _omz::log info "plugins enabled: ${(j:, :)add_plugins}."
 
-  # Only reload zsh if run in an interactive session
-  [[ ! -o interactive ]] || _omz::reload
+  # Old zsh versions don't have ZSH_ARGZERO
+  local zsh="${ZSH_ARGZERO:-${functrace[-1]%:*}}"
+  # Check whether to run a login shell
+  [[ "$zsh" = -* || -o login ]] && exec -l "${zsh#-}" || exec "$zsh"
 }
 
 function _omz::plugin::info {
@@ -573,7 +574,7 @@ function _omz::pr::test {
 
     # Rebase pull request branch against the current master
     _omz::log info "rebasing PR #$1..."
-    command git rebase --no-gpg-sign master ohmyzsh/pull-$1 || {
+    command git rebase master ohmyzsh/pull-$1 || {
       command git rebase --abort &>/dev/null
       _omz::log warn "could not rebase PR #$1 on top of master."
       _omz::log warn "you might not see the latest stable changes."
@@ -720,7 +721,7 @@ EOF
   }
 
   # Exit if the new .zshrc file has syntax errors
-  if ! command zsh -n "$zdot/.zshrc"; then
+  if ! zsh -n "$zdot/.zshrc"; then
     _omz::log error "broken syntax in '"${zdot/#$HOME/\~}/.zshrc"'. Rolling back changes..."
     command mv -f "$zdot/.zshrc" "$zdot/.zshrc.new"
     command mv -f "$zdot/.zshrc.bck" "$zdot/.zshrc"
@@ -730,8 +731,10 @@ EOF
   # Restart the zsh session if there were no errors
   _omz::log info "'$1' theme set correctly."
 
-  # Only reload zsh if run in an interactive session
-  [[ ! -o interactive ]] || _omz::reload
+  # Old zsh versions don't have ZSH_ARGZERO
+  local zsh="${ZSH_ARGZERO:-${functrace[-1]%:*}}"
+  # Check whether to run a login shell
+  [[ "$zsh" = -* || -o login ]] && exec -l "${zsh#-}" || exec "$zsh"
 }
 
 function _omz::theme::use {
@@ -758,13 +761,13 @@ function _omz::theme::use {
 }
 
 function _omz::update {
-  local last_commit=$(builtin cd -q "$ZSH"; git rev-parse HEAD)
+  local last_commit=$(cd "$ZSH"; git rev-parse HEAD)
 
   # Run update script
   if [[ "$1" != --unattended ]]; then
-    ZSH="$ZSH" command zsh -f "$ZSH/tools/upgrade.sh" --interactive || return $?
+    ZSH="$ZSH" zsh -f "$ZSH/tools/upgrade.sh" --interactive || return $?
   else
-    ZSH="$ZSH" command zsh -f "$ZSH/tools/upgrade.sh" || return $?
+    ZSH="$ZSH" zsh -f "$ZSH/tools/upgrade.sh" || return $?
   fi
 
   # Update last updated file
@@ -774,7 +777,7 @@ function _omz::update {
   command rm -rf "$ZSH/log/update.lock"
 
   # Restart the zsh session if there were changes
-  if [[ "$1" != --unattended && "$(builtin cd -q "$ZSH"; git rev-parse HEAD)" != "$last_commit" ]]; then
+  if [[ "$1" != --unattended && "$(cd "$ZSH"; git rev-parse HEAD)" != "$last_commit" ]]; then
     # Old zsh versions don't have ZSH_ARGZERO
     local zsh="${ZSH_ARGZERO:-${functrace[-1]%:*}}"
     # Check whether to run a login shell
@@ -784,7 +787,7 @@ function _omz::update {
 
 function _omz::version {
   (
-    builtin cd -q "$ZSH"
+    cd "$ZSH"
 
     # Get the version name:
     # 1) try tag-like version
