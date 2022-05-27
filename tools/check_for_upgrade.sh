@@ -176,6 +176,7 @@ function update_ohmyzsh() {
     return
   fi
 
+<<<<<<< HEAD
   # Ask for confirmation before updating unless in auto mode
   if [[ "$update_mode" = auto ]]; then
     update_ohmyzsh
@@ -195,6 +196,19 @@ function update_ohmyzsh() {
       [nN]) update_last_updated_file ;&
       *) echo "[oh-my-zsh] You can update manually by running \`omz update\`" ;;
     esac
+=======
+  # If in reminder mode or user has typed input, show reminder and exit
+  if [[ "$update_mode" = reminder ]] || has_typed_input; then
+    printf '\r\e[0K' # move cursor to first column and clear whole line
+    echo "[oh-my-zsh] It's time to update! You can do that by running \`omz update\`"
+    return 0
+  fi
+
+  # Don't ask for confirmation before updating if in auto mode
+  if [[ "$update_mode" = auto ]]; then
+    update_ohmyzsh
+    return $?
+>>>>>>> e9e8c6b54d594109041bdd4bc3902b40f9ae8849
   fi
 }
 
